@@ -279,7 +279,7 @@ Remember, you're the friendly voice of Narayan Shiva Sansthan Foundation on What
 
     return response.text if response.text else "Sorry, I couldn't generate a response at the moment."
 
-app.route('/twilio_webhook', methods=['POST'])
+@app.route('/twilio_webhook', methods=['POST'])
 def twilio_webhook():
     print("Raw Twilio Request Data:")
     print(request.form)
