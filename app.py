@@ -436,34 +436,5 @@ def root():
     """Root endpoint for health checks."""
     return jsonify({"status": "ok", "message": "Narayan Shiva Sansthan WhatsApp Service"}), 200
 
-# Create tables if they don't exist on startup
-@app.before_first_request
-def create_tables():
-    async def setup_db():
-        try:
-            conn = await connect_to_neon()
-            if not conn:
-                print("Failed to connect to database for table creation")
-                return
-            
-            # Create logs table if it doesn't exist
-            await conn.execute('''
-                CREATE TABLE IF NOT EXISTS logs (
-                    id SERIAL PRIMARY KEY,
-                    phone TEXT UNIQUE NOT NULL,
-                    summary TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            print("Database tables created successfully")
-        except Exception as e:
-            print(f"Error creating database tables: {e}")
-        finally:
-            if conn:
-                await conn.close()
-    
-    asyncio.run(setup_db())
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=4000, debug=False)
