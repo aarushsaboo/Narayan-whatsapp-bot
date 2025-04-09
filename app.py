@@ -1,13 +1,14 @@
 import os
 import re
 import random
+import asyncio
 from datetime import datetime, timedelta
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from twilio.twiml.messaging_response import MessagingResponse
-from flask import jsonify
+import asyncpg
 
 load_dotenv()
 
@@ -18,7 +19,107 @@ client = genai.Client(
     api_key=os.getenv("GEMINI_API_KEY"),
 )
 
-# Expanded dummy donation data (in-memory dictionary)
+# Neon DB connection parameters
+NEON_DB_USER = os.getenv("NEON_DB_USER")
+NEON_DB_PASSWORD = os.getenv("NEON_DB_PASSWORD")
+NEON_DB_HOST = os.getenv("NEON_DB_HOST")
+NEON_DB_PORT = os.getenv("NEON_DB_PORT")
+NEON_DB_NAME = os.getenv("NEON_DB_NAME")
+
+# Function to connect to Neon DB
+async def connect_to_neon():
+    try:
+        return await asyncpg.connect(
+            user=NEON_DB_USER,
+            password=NEON_DB_PASSWORD,
+            database=NEON_DB_NAME,
+            host=NEON_DB_HOST,
+            port=NEON_DB_PORT
+        )
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        return None
+
+# Function to get conversation summary for a phone number
+async def get_conversation_summary(phone_number):
+    """Fetch conversation summary for a given phone number"""
+    try:
+        conn = await connect_to_neon()
+        if not conn:
+            return None
+        
+        # Check if we have logs for this phone number
+        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
+        
+        if row:
+            return row['summary']
+        return None
+    except Exception as e:
+        print(f"Error fetching conversation summary: {e}")
+        return None
+    finally:
+        if conn:
+            await conn.close()
+
+# Function to update conversation summary
+async def update_conversation_summary(phone_number, user_message, ai_response):
+    """Update or create conversation summary for a given phone number"""
+    try:
+        conn = await connect_to_neon()
+        if not conn:
+            return False
+        
+        # Check if we have a record for this phone number
+        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
+        
+        # Create log entry for this conversation
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_log_entry = f"[{timestamp}] User: {user_message} | Assistant: {ai_response}"
+        
+        if row:
+            # Get existing log and summary
+            existing_summary = row['summary']
+            
+            # Generate new summary with Gemini
+            prompt = (
+                f"Based on this previous conversation summary: '{existing_summary}' "
+                f"and this new exchange - User: '{user_message}' and Assistant: '{ai_response}', "
+                f"provide a concise updated summary of the conversation so far. "
+                f"Keep important details about the user's needs and context. "
+                f"Format as 'Summary of conversation so far: [your summary]. Last message from user: {user_message}'"
+            )
+            
+            summary_response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[prompt]
+            ).text.strip()
+            
+            # Update the existing record
+            await conn.execute(
+                "UPDATE logs SET summary = $1 WHERE phone = $2",
+                summary_response, phone_number
+            )
+        else:
+            # Create initial summary
+            summary = f"Summary of conversation so far: Initial contact from user. Last message from user: {user_message}"
+            
+            # Create a new record
+            await conn.execute(
+                "INSERT INTO logs (phone, summary) VALUES ($1, $2)",
+                phone_number, summary
+            )
+            
+            summary_response = summary
+        
+        return summary_response
+    except Exception as e:
+        print(f"Error updating conversation summary: {e}")
+        return None
+    finally:
+        if conn:
+            await conn.close()
+
+# Dummy donation data (in-memory dictionary for reference)
 DUMMY_DONATIONS = {
     "+919876543210": [
         {"amount": 3000, "date": "2025-03-02", "utr": "UTR789456", "receipt_sent": False, "donor_name": "Rajesh Sharma", "payment_method": "UPI", "campaign": "Education Fund"},
@@ -193,12 +294,10 @@ def get_user_id_from_info(extracted_info, sender_phone):
     elif extracted_info["phone"] and "97800" in extracted_info["phone"]:
         return "+919780086800"
 
-    # Default to a random existing donor if no match is found
-    if DUMMY_DONATIONS:
-        return random.choice(list(DUMMY_DONATIONS.keys()))
-    return None # No donors in the system
+    # Default to sender's phone
+    return sender_phone
 
-def generate_response(query, sender_phone):
+async def generate_response_async(query, sender_phone):
     model = "gemini-2.0-flash"
 
     # Extract information and identify intent
@@ -208,6 +307,9 @@ def generate_response(query, sender_phone):
     # Determine user ID (using phone number as ID in this context)
     user_phone = get_user_id_from_info(extracted_info, sender_phone)
 
+    # Get conversation summary from Neon DB
+    conversation_summary = await get_conversation_summary(user_phone)
+    
     # Build user context with detailed information
     user_context = ""
     if user_phone and user_phone in DUMMY_DONATIONS and DUMMY_DONATIONS[user_phone]:
@@ -217,6 +319,11 @@ def generate_response(query, sender_phone):
             user_context += f"- ₹{d.get('amount')} on {d.get('date')} for {d.get('campaign')}, via {d.get('payment_method')}, UTR: {d.get('utr')}, Receipt Status: {receipt_status}\n"
     else:
         user_context = "\nThis appears to be a new donor with no previous donation history in our system.\n"
+
+    # Include conversation history if available
+    conversation_context = ""
+    if conversation_summary:
+        conversation_context = f"\nConversation Summary:\n{conversation_summary}\n"
 
     # Add current date and time context
     current_datetime = datetime.now().strftime("%Y-%m-%d, %A, %H:%M")
@@ -234,6 +341,9 @@ Current information:
 
 Donor information:
 {user_context}
+
+Previous conversation context:
+{conversation_context}
 
 Foundation information:
 {LONG_CONTEXT}
@@ -277,7 +387,16 @@ Remember, you're the friendly voice of Narayan Shiva Sansthan Foundation on What
         config=generate_config
     )
 
-    return response.text if response.text else "Sorry, I couldn't generate a response at the moment."
+    response_text = response.text if response.text else "Sorry, I couldn't generate a response at the moment."
+    
+    # Update conversation summary in the database
+    await update_conversation_summary(user_phone, query, response_text)
+    
+    return response_text
+
+# Create a synchronous wrapper for the async function
+def generate_response(query, sender_phone):
+    return asyncio.run(generate_response_async(query, sender_phone))
 
 @app.route('/twilio_webhook', methods=['POST'])
 def twilio_webhook():
@@ -294,6 +413,10 @@ def twilio_webhook():
         error_message = "<Response><Message>Error: Phone number and message are required.</Message></Response>"
         return error_message, 400, {'Content-Type': 'application/xml'}
 
+    # Extract phone number from Twilio format
+    if sender_phone.startswith('whatsapp:'):
+        sender_phone = sender_phone.replace('whatsapp:', '')
+
     response_text = generate_response(message_body, sender_phone)
 
     response = MessagingResponse()
@@ -307,6 +430,40 @@ def twilio_webhook():
 def health_check():
     """Endpoint to check the health of the application."""
     return jsonify({"status": "ok", "message": "WhatsApp backend is healthy"}), 200
+
+@app.route('/', methods=['GET', 'HEAD'])
+def root():
+    """Root endpoint for health checks."""
+    return jsonify({"status": "ok", "message": "Narayan Shiva Sansthan WhatsApp Service"}), 200
+
+# Create tables if they don't exist on startup
+@app.before_first_request
+def create_tables():
+    async def setup_db():
+        try:
+            conn = await connect_to_neon()
+            if not conn:
+                print("Failed to connect to database for table creation")
+                return
+            
+            # Create logs table if it doesn't exist
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS logs (
+                    id SERIAL PRIMARY KEY,
+                    phone TEXT UNIQUE NOT NULL,
+                    summary TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            print("Database tables created successfully")
+        except Exception as e:
+            print(f"Error creating database tables: {e}")
+        finally:
+            if conn:
+                await conn.close()
+    
+    asyncio.run(setup_db())
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=4000, debug=False)
