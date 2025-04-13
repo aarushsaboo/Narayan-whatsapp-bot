@@ -4,3 +4,4 @@ python-dotenv
 Flask
 twilio
 asyncpg
+langdetect
