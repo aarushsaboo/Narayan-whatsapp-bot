@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from twilio.twiml.messaging_response import MessagingResponse
 import asyncpg
+from langdetect import detect, LangDetectException
 
 load_dotenv()
 
@@ -46,23 +47,23 @@ async def get_conversation_summary(phone_number):
     try:
         conn = await connect_to_neon()
         if not conn:
-            return None
+            return None, None  # Return a tuple with two None values
         
         # Check if we have logs for this phone number
-        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
+        row = await conn.fetchrow("SELECT summary, preferred_language FROM logs WHERE phone = $1", phone_number)
         
         if row:
-            return row['summary']
-        return None
+            return row['summary'], row.get('preferred_language')
+        return None, None  # Return a tuple with two None values
     except Exception as e:
         print(f"Error fetching conversation summary: {e}")
-        return None
+        return None, None  # Return a tuple with two None values
     finally:
         if conn:
             await conn.close()
 
 # Function to update conversation summary
-async def update_conversation_summary(phone_number, user_message, ai_response):
+async def update_conversation_summary(phone_number, user_message, ai_response, preferred_language=None):
     """Update or create conversation summary for a given phone number"""
     try:
         conn = await connect_to_neon()
@@ -70,11 +71,15 @@ async def update_conversation_summary(phone_number, user_message, ai_response):
             return False
         
         # Check if we have a record for this phone number
-        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
+        row = await conn.fetchrow("SELECT summary, preferred_language FROM logs WHERE phone = $1", phone_number)
         
         # Create log entry for this conversation
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_log_entry = f"[{timestamp}] User: {user_message} | Assistant: {ai_response}"
+        
+        # Update the preferred language if provided and different from existing
+        if not preferred_language and row and row.get('preferred_language'):
+            preferred_language = row.get('preferred_language')
         
         if row:
             # Get existing log and summary
@@ -96,8 +101,8 @@ async def update_conversation_summary(phone_number, user_message, ai_response):
             
             # Update the existing record
             await conn.execute(
-                "UPDATE logs SET summary = $1 WHERE phone = $2",
-                summary_response, phone_number
+                "UPDATE logs SET summary = $1, preferred_language = $2 WHERE phone = $3",
+                summary_response, preferred_language, phone_number
             )
         else:
             # Create initial summary
@@ -105,8 +110,8 @@ async def update_conversation_summary(phone_number, user_message, ai_response):
             
             # Create a new record
             await conn.execute(
-                "INSERT INTO logs (phone, summary) VALUES ($1, $2)",
-                phone_number, summary
+                "INSERT INTO logs (phone, summary, preferred_language) VALUES ($1, $2, $3)",
+                phone_number, summary, preferred_language
             )
             
             summary_response = summary
@@ -118,6 +123,29 @@ async def update_conversation_summary(phone_number, user_message, ai_response):
     finally:
         if conn:
             await conn.close()
+
+# Function to detect language of a message
+def detect_language(text):
+    try:
+        lang_code = detect(text)
+        # Map language codes to full names
+        language_map = {
+            'hi': 'Hindi',
+            'en': 'English',
+            'mr': 'Marathi',
+            'gu': 'Gujarati',
+            'ta': 'Tamil',
+            'te': 'Telugu',
+            'kn': 'Kannada',
+            'ml': 'Malayalam',
+            'pa': 'Punjabi',
+            'bn': 'Bengali',
+            'ur': 'Urdu',
+            'or': 'Odia'
+        }
+        return lang_code, language_map.get(lang_code, 'Unknown')
+    except LangDetectException:
+        return 'en', 'English'  # Default to English if detection fails
 
 # Dummy donation data (in-memory dictionary for reference)
 DUMMY_DONATIONS = {
@@ -201,6 +229,58 @@ Narayan Shiva Sansthan
 123 Charity Lane, Saket
 New Delhi - 110017
 """
+
+# Multi-language greeting templates
+GREETINGS = {
+    "Hindi": {
+        "hello": "नमस्ते!",
+        "intro": "मैं नारायण शिव संस्थान से अनन्या हूँ।",
+        "welcome": "नारायण शिव संस्थान में आपका स्वागत है!",
+        "thank_you": "आपके समर्थन के लिए धन्यवाद।"
+    },
+    "English": {
+        "hello": "Hello!",
+        "intro": "I'm Ananya from Narayan Shiva Sansthan.",
+        "welcome": "Welcome to Narayan Shiva Sansthan!",
+        "thank_you": "Thank you for your support."
+    },
+    "Marathi": {
+        "hello": "नमस्कार!",
+        "intro": "मी नारायण शिव संस्थानची अनन्या आहे.",
+        "welcome": "नारायण शिव संस्थानमध्ये आपले स्वागत आहे!",
+        "thank_you": "आपल्या समर्थनासाठी धन्यवाद."
+    },
+    "Gujarati": {
+        "hello": "નમસ્તે!",
+        "intro": "હું નારાયણ શિવ સંસ્થાનથી અનન્યા છું.",
+        "welcome": "નારાયણ શિવ સંસ્થાનમાં આપનું સ્વાગત છે!",
+        "thank_you": "આપના સમર્થન બદલ આભાર."
+    },
+    "Tamil": {
+        "hello": "வணக்கம்!",
+        "intro": "நான் நாராயண சிவ சன்ஸ்தானில் இருந்து அனன்யா.",
+        "welcome": "நாராயண சிவ சன்ஸ்தானுக்கு வரவேற்கிறோம்!",
+        "thank_you": "உங்கள் ஆதரவுக்கு நன்றி."
+    },
+    "Telugu": {
+        "hello": "నమస్కారం!",
+        "intro": "నేను నారాయణ శివ సంస్థాన్ నుండి అనన్య.",
+        "welcome": "నారాయణ శివ సంస్థాన్‌కి స్వాగతం!",
+        "thank_you": "మీ మద్దతుకు ధన్యవాదాలు."
+    },
+    "Bengali": {
+        "hello": "নমস্কার!",
+        "intro": "আমি নারায়ণ শিব সংস্থান থেকে অনন্যা।",
+        "welcome": "নারায়ণ শিব সংস্থানে আপনাকে স্বাগতম!",
+        "thank_you": "আপনার সমর্থনের জন্য ধন্যবাদ।"
+    },
+    "Punjabi": {
+        "hello": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ!",
+        "intro": "ਮੈਂ ਨਾਰਾਇਣ ਸ਼ਿਵ ਸੰਸਥਾਨ ਤੋਂ ਅਨੰਨਿਆ ਹਾਂ।",
+        "welcome": "ਨਾਰਾਇਣ ਸ਼ਿਵ ਸੰਸਥਾਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ!",
+        "thank_you": "ਤੁਹਾਡੇ ਸਮਰਥਨ ਲਈ ਧੰਨਵਾਦ।"
+    }
+}
 
 OFFICE_HOURS = "Monday to Saturday, 10:00 AM to 6:00 PM"
 CURRENT_CAMPAIGNS = ["Education Fund", "Healthcare Initiative", "Clean Water Project", "Summer Relief 2025"]
@@ -300,6 +380,9 @@ def get_user_id_from_info(extracted_info, sender_phone):
 async def generate_response_async(query, sender_phone):
     model = "gemini-2.0-flash"
 
+    # Detect the language of the user's message
+    lang_code, language_name = detect_language(query)
+    
     # Extract information and identify intent
     extracted_info = extract_info_from_query(query)
     intent = identify_intent(query)
@@ -308,7 +391,22 @@ async def generate_response_async(query, sender_phone):
     user_phone = get_user_id_from_info(extracted_info, sender_phone)
 
     # Get conversation summary from Neon DB
-    conversation_summary = await get_conversation_summary(user_phone)
+    # Fix: Handle the case where get_conversation_summary returns None
+    try:
+        conversation_summary_result = await get_conversation_summary(user_phone)
+        if conversation_summary_result is None:
+            conversation_summary, stored_language = None, None
+        else:
+            conversation_summary, stored_language = conversation_summary_result
+    except Exception as e:
+        print(f"Error getting conversation summary: {e}")
+        conversation_summary, stored_language = None, None
+    
+    # If we have a stored language preference, use it unless the current message is in a different language
+    preferred_language = language_name
+    if stored_language and lang_code == 'en':
+        # If message is in English but user has a preferred non-English language, keep using that language
+        preferred_language = stored_language
     
     # Build user context with detailed information
     user_context = ""
@@ -329,12 +427,21 @@ async def generate_response_async(query, sender_phone):
     current_datetime = datetime.now().strftime("%Y-%m-%d, %A, %H:%M")
     time_context = f"\nCurrent Date and Time: {current_datetime}\nOffice Hours: {OFFICE_HOURS}\nActive Campaigns: {', '.join(CURRENT_CAMPAIGNS)}\n"
 
+    # Add language-specific greeting templates
+    greeting_templates = GREETINGS.get(preferred_language, GREETINGS["English"])
+    greeting_context = f"\nGreeting templates for {preferred_language}:\n"
+    greeting_context += "\n".join([f"- {key}: {value}" for key, value in greeting_templates.items()])
+
     system_instruction = f"""You are Ananya, a friendly and helpful receptionist at Narayan Shiva Sansthan, a charitable organization.
 Your role is to assist donors, potential donors, and anyone with inquiries about the foundation via WhatsApp.
 Always be warm, personable, and speak as if you're responding from our charity office.
 
+IMPORTANT: The user is communicating in {preferred_language}. YOU MUST RESPOND IN {preferred_language} USING THE APPROPRIATE SCRIPT.
+If the user is communicating in Hindi, you MUST respond in Hindi using Devanagari script (देवनागरी).
+If the user is communicating in any other Indian language, respond in that language using its native script.
+If the user switches to English, you can respond in English.
+
 Use Indian expressions and references where appropriate. Address people respectfully, using "ji" occasionally.
-If the conversation seems to be in Hindi or any regional language, respond accordingly.
 
 Current information:
 {time_context}
@@ -345,11 +452,14 @@ Donor information:
 Previous conversation context:
 {conversation_context}
 
+Available greetings:
+{greeting_context}
+
 Foundation information:
 {LONG_CONTEXT}
 
 When starting a conversation:
-- Use phrases like "Namaste!", "Hello!", or "Welcome to Narayan Shiva Sansthan!"
+- Use phrases like "{greeting_templates.get('hello', 'Namaste!')}", "Hello!", or "{greeting_templates.get('welcome', 'Welcome to Narayan Shiva Sansthan!')}"
 - Introduce yourself as Ananya from the reception desk.
 - Thank donors for their support and generosity if they mention past donations.
 
@@ -389,8 +499,11 @@ Remember, you're the friendly voice of Narayan Shiva Sansthan Foundation on What
 
     response_text = response.text if response.text else "Sorry, I couldn't generate a response at the moment."
     
-    # Update conversation summary in the database
-    await update_conversation_summary(user_phone, query, response_text)
+    # Update conversation summary in the database with the detected language
+    try:
+        await update_conversation_summary(user_phone, query, response_text, preferred_language)
+    except Exception as e:
+        print(f"Error updating conversation summary: {e}")
     
     return response_text
 
