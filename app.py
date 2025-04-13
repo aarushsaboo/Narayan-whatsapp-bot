@@ -377,6 +377,13 @@ def get_user_id_from_info(extracted_info, sender_phone):
     # Default to sender's phone
     return sender_phone
 
+# Function to check if the message is an introductory greeting
+def is_introductory_message(query):
+    query_lower = query.lower().strip()
+    greetings = ["hi", "hello", "namaste", "namaskar", "vanakkam", "salaam", "sat sri akal", "नमस्ते", "नमस्कार", "வணக்கம்", "నమస్కారం", "নমস্কার", "ਸਤ ਸ੍ਰੀ ਅਕਾਲ"]
+    # Consider it introductory if it's short (≤ 2 words) and matches a greeting
+    return len(query_lower.split()) <= 2 and any(greet in query_lower for greet in greetings)
+
 async def generate_response_async(query, sender_phone):
     model = "gemini-2.0-flash"
 
@@ -393,8 +400,8 @@ async def generate_response_async(query, sender_phone):
     # Get conversation summary from Neon DB
     conversation_summary = await get_conversation_summary(user_phone)
     
-    # If we have a stored language preference, use it unless the current message is in a different language
-    preferred_language = language_name
+    # Set language: English for English messages, detected language for others
+    preferred_language = "English" if lang_code == "en" else language_name
     
     # Build user context with detailed information
     user_context = ""
@@ -425,9 +432,9 @@ Your role is to assist donors, potential donors, and anyone with inquiries about
 Always be warm, personable, and speak as if you're responding from our charity office.
 
 IMPORTANT: The user is communicating in {preferred_language}. YOU MUST RESPOND IN {preferred_language} USING THE APPROPRIATE SCRIPT.
-If the user is communicating in Hindi, you MUST respond in Hindi using Devanagari script (देवनागरी).
+If the user message is in English, ALWAYS respond in English.
+If the user is communicating in Hindi, respond in Hindi using Devanagari script (देवनागरी).
 If the user is communicating in any other Indian language, respond in that language using its native script.
-If the user switches to English, you can respond in English.
 
 Use Indian expressions and references where appropriate. Address people respectfully, using "ji" occasionally.
 
@@ -447,8 +454,8 @@ Foundation information:
 {LONG_CONTEXT}
 
 When starting a conversation:
-- Use phrases like "{greeting_templates.get('hello', 'Namaste!')}", "Hello!", or "{greeting_templates.get('welcome', 'Welcome to Narayan Shiva Sansthan!')}"
-- Introduce yourself as Ananya from the reception desk.
+- ONLY use greetings like "{greeting_templates.get('hello', 'Namaste!')}" or "{greeting_templates.get('intro', 'I\\'m Ananya from Narayan Shiva Sansthan.')}" if the user's message is a short greeting like "hi", "hello", or "namaste".
+- For all other messages, respond directly to the query without any introductory greeting.
 - Thank donors for their support and generosity if they mention past donations.
 
 IMPORTANT: Never include any "acting" or roleplay elements in your responses. Do not include phrases like "(slight pause)" or descriptions of your actions. Simply respond as if you're having a natural conversation. Keep your responses concise for WhatsApp.
@@ -485,7 +492,7 @@ Remember, you're the friendly voice of Narayan Shiva Sansthan Foundation on What
         config=generate_config
     )
 
-    response_text = response.text if response.text else "Sorry, I couldn't generate a ABOVE at the moment."
+    response_text = response.text if response.text else "Sorry, I couldn't generate a response at the moment."
     
     # Update conversation summary in the database
     await update_conversation_summary(user_phone, query, response_text)
