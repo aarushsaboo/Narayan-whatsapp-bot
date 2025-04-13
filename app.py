@@ -44,45 +44,45 @@ async def connect_to_neon():
 # Function to get conversation summary for a phone number
 async def get_conversation_summary(phone_number):
     """Fetch conversation summary for a given phone number"""
+    conn = None
     try:
         conn = await connect_to_neon()
         if not conn:
-            return None, None  # Return a tuple with two None values
+            print("Failed to connect to database")
+            return None
         
-        # Check if we have logs for this phone number
-        row = await conn.fetchrow("SELECT summary, preferred_language FROM logs WHERE phone = $1", phone_number)
+        # Fetch summary
+        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
         
         if row:
-            return row['summary'], row.get('preferred_language')
-        return None, None  # Return a tuple with two None values
+            return row['summary']
+        return None
     except Exception as e:
         print(f"Error fetching conversation summary: {e}")
-        return None, None  # Return a tuple with two None values
+        return None
     finally:
         if conn:
             await conn.close()
 
 # Function to update conversation summary
-async def update_conversation_summary(phone_number, user_message, ai_response, preferred_language=None):
+async def update_conversation_summary(phone_number, user_message, ai_response):
     """Update or create conversation summary for a given phone number"""
+    conn = None
     try:
         conn = await connect_to_neon()
         if not conn:
+            print("Failed to connect to database")
             return False
         
         # Check if we have a record for this phone number
-        row = await conn.fetchrow("SELECT summary, preferred_language FROM logs WHERE phone = $1", phone_number)
+        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
         
         # Create log entry for this conversation
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_log_entry = f"[{timestamp}] User: {user_message} | Assistant: {ai_response}"
         
-        # Update the preferred language if provided and different from existing
-        if not preferred_language and row and row.get('preferred_language'):
-            preferred_language = row.get('preferred_language')
-        
         if row:
-            # Get existing log and summary
+            # Get existing summary
             existing_summary = row['summary']
             
             # Generate new summary with Gemini
@@ -101,8 +101,8 @@ async def update_conversation_summary(phone_number, user_message, ai_response, p
             
             # Update the existing record
             await conn.execute(
-                "UPDATE logs SET summary = $1, preferred_language = $2 WHERE phone = $3",
-                summary_response, preferred_language, phone_number
+                "UPDATE logs SET summary = $1 WHERE phone = $2",
+                summary_response, phone_number
             )
         else:
             # Create initial summary
@@ -110,8 +110,8 @@ async def update_conversation_summary(phone_number, user_message, ai_response, p
             
             # Create a new record
             await conn.execute(
-                "INSERT INTO logs (phone, summary, preferred_language) VALUES ($1, $2, $3)",
-                phone_number, summary, preferred_language
+                "INSERT INTO logs (phone, summary) VALUES ($1, $2)",
+                phone_number, summary
             )
             
             summary_response = summary
@@ -391,22 +391,10 @@ async def generate_response_async(query, sender_phone):
     user_phone = get_user_id_from_info(extracted_info, sender_phone)
 
     # Get conversation summary from Neon DB
-    # Fix: Handle the case where get_conversation_summary returns None
-    try:
-        conversation_summary_result = await get_conversation_summary(user_phone)
-        if conversation_summary_result is None:
-            conversation_summary, stored_language = None, None
-        else:
-            conversation_summary, stored_language = conversation_summary_result
-    except Exception as e:
-        print(f"Error getting conversation summary: {e}")
-        conversation_summary, stored_language = None, None
+    conversation_summary = await get_conversation_summary(user_phone)
     
     # If we have a stored language preference, use it unless the current message is in a different language
     preferred_language = language_name
-    if stored_language and lang_code == 'en':
-        # If message is in English but user has a preferred non-English language, keep using that language
-        preferred_language = stored_language
     
     # Build user context with detailed information
     user_context = ""
@@ -497,13 +485,10 @@ Remember, you're the friendly voice of Narayan Shiva Sansthan Foundation on What
         config=generate_config
     )
 
-    response_text = response.text if response.text else "Sorry, I couldn't generate a response at the moment."
+    response_text = response.text if response.text else "Sorry, I couldn't generate a ABOVE at the moment."
     
-    # Update conversation summary in the database with the detected language
-    try:
-        await update_conversation_summary(user_phone, query, response_text, preferred_language)
-    except Exception as e:
-        print(f"Error updating conversation summary: {e}")
+    # Update conversation summary in the database
+    await update_conversation_summary(user_phone, query, response_text)
     
     return response_text
 
