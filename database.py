@@ -16,27 +16,27 @@ async def connect_to_neon():
         print(f"Database connection error: {e}")
         return None
 
-async def get_conversation_summary(phone_number):
+async def get_user_data(phone_number):
     conn = None
     try:
         conn = await connect_to_neon()
         if not conn:
             print("Failed to connect to database")
-            return None
+            return None, None
         
-        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
+        row = await conn.fetchrow("SELECT summary, preferred_language FROM logs WHERE phone = $1", phone_number)
         
         if row:
-            return row['summary']
-        return None
+            return row['summary'], row['preferred_language']
+        return None, None
     except Exception as e:
-        print(f"Error fetching conversation summary: {e}")
-        return None
+        print(f"Error fetching user data: {e}")
+        return None, None
     finally:
         if conn:
             await conn.close()
 
-async def update_conversation_summary(phone_number, user_message, ai_response, client):
+async def update_user_data(phone_number, user_message, ai_response, detected_language, client):
     conn = None
     try:
         conn = await connect_to_neon()
@@ -44,9 +44,13 @@ async def update_conversation_summary(phone_number, user_message, ai_response, c
             print("Failed to connect to database")
             return False
         
-        row = await conn.fetchrow("SELECT summary FROM logs WHERE phone = $1", phone_number)
+        # Get current timestamp
+        current_time = datetime.now()
+        timestamp = current_time.strftime("%Y-%m-%d %H:%M:%S")
         
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Check if we have a record for this phone number
+        row = await conn.fetchrow("SELECT summary, preferred_language FROM logs WHERE phone = $1", phone_number)
+        
         new_log_entry = f"[{timestamp}] User: {user_message} | Assistant: {ai_response}"
         
         if row:
@@ -66,22 +70,22 @@ async def update_conversation_summary(phone_number, user_message, ai_response, c
             ).text.strip()
             
             await conn.execute(
-                "UPDATE logs SET summary = $1 WHERE phone = $2",
-                summary_response, phone_number
+                "UPDATE logs SET summary = $1, preferred_language = $2, updated_at = $3 WHERE phone = $4",
+                summary_response, detected_language, current_time, phone_number
             )
         else:
             summary = f"Summary of conversation so far: Initial contact from user. Last message from user: {user_message}"
             
             await conn.execute(
-                "INSERT INTO logs (phone, summary) VALUES ($1, $2)",
-                phone_number, summary
+                "INSERT INTO logs (phone, summary, preferred_language, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
+                phone_number, summary, detected_language, current_time, current_time
             )
             
             summary_response = summary
         
         return summary_response
     except Exception as e:
-        print(f"Error updating conversation summary: {e}")
+        print(f"Error updating user data: {e}")
         return None
     finally:
         if conn:

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from google.genai import types
 from env import DUMMY_DONATIONS, DONOR_EMAILS, LONG_CONTEXT, OFFICE_HOURS, CURRENT_CAMPAIGNS, GREETINGS
 from message_analysis import detect_language, extract_info_from_query, identify_intent, get_user_id_from_info
-from database import get_conversation_summary, update_conversation_summary
+from database import get_user_data, update_user_data
 
 async def generate_response_async(query, sender_phone, client):
     model = "gemini-2.0-flash"
@@ -16,10 +16,18 @@ async def generate_response_async(query, sender_phone, client):
 
     user_phone = get_user_id_from_info(extracted_info, sender_phone)
 
-    conversation_summary = await get_conversation_summary(user_phone)
+    # Get conversation summary and preferred language from Neon DB
+    conversation_summary, stored_language = await get_user_data(user_phone)
     
-    preferred_language = "English" if lang_code == "en" else language_name
+    # Use the stored language if available, otherwise use the detected language
+    # This ensures we maintain the language across the conversation unless user switches
+    preferred_language = stored_language if stored_language else language_name
     
+    # If user is now using a different language than what's stored, update to the new language
+    if stored_language and stored_language != language_name:
+        preferred_language = language_name  # Update to the new language the user is using
+    
+    # Build user context with detailed information
     user_context = ""
     if user_phone and user_phone in DUMMY_DONATIONS and DUMMY_DONATIONS[user_phone]:
         user_context = f"\nDonor Information:\nName: {DUMMY_DONATIONS[user_phone][0].get('donor_name')}\nPhone: {user_phone}\nEmail: {DONOR_EMAILS.get(user_phone)}\n\nDonation History:\n"
@@ -107,7 +115,7 @@ Remember, you're the friendly voice of Narayan Shiva Sansthan Foundation on What
 
     response_text = response.text if response.text else "Sorry, I couldn't generate a response at the moment."
     
-    await update_conversation_summary(user_phone, query, response_text, client)
+    await update_user_data(user_phone, query, response_text, preferred_language, client)
     
     return response_text
 
