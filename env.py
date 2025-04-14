@@ -1,3 +1,19 @@
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Neon DB connection parameters
+NEON_DB_USER = os.getenv("NEON_DB_USER")
+NEON_DB_PASSWORD = os.getenv("NEON_DB_PASSWORD")
+NEON_DB_HOST = os.getenv("NEON_DB_HOST")
+NEON_DB_PORT = os.getenv("NEON_DB_PORT")
+NEON_DB_NAME = os.getenv("NEON_DB_NAME")
+
+
 # Expanded dummy donation data with more realistic information
 DUMMY_DONATIONS = {
     1: [

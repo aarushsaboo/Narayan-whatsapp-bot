@@ -5,28 +5,18 @@ import asyncio
 from datetime import datetime, timedelta
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from twilio.twiml.messaging_response import MessagingResponse
 import asyncpg
 from langdetect import detect, LangDetectException
-from constants import DUMMY_DONATIONS, DONOR_EMAILS, LONG_CONTEXT, OFFICE_HOURS, CURRENT_CAMPAIGNS, GREETINGS
-
-load_dotenv()
+from env import DUMMY_DONATIONS, DONOR_EMAILS, LONG_CONTEXT, OFFICE_HOURS, CURRENT_CAMPAIGNS, GREETINGS, NEON_DB_USER, NEON_DB_PASSWORD, NEON_DB_NAME, NEON_DB_HOST, NEON_DB_PORT, GEMINI_API_KEY
 
 app = Flask(__name__)
 
 # Set up Gemini API key from .env file
 client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
+    api_key=GEMINI_API_KEY,
 )
-
-# Neon DB connection parameters
-NEON_DB_USER = os.getenv("NEON_DB_USER")
-NEON_DB_PASSWORD = os.getenv("NEON_DB_PASSWORD")
-NEON_DB_HOST = os.getenv("NEON_DB_HOST")
-NEON_DB_PORT = os.getenv("NEON_DB_PORT")
-NEON_DB_NAME = os.getenv("NEON_DB_NAME")
 
 # Function to connect to Neon DB
 async def connect_to_neon():
