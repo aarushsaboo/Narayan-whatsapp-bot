@@ -29,8 +29,9 @@ def identify_intent(query):
 
     if any(word in query_lower for word in ["donate", "contribution", "give", "support", "contribute", "payment"]):
         return "donation_intent"
-    elif any(word in query_lower for word in ["receipt", "tax", "acknowledgment", "certificate", "80g"]) and any(word in query_lower for word in ["didn't get", "haven't received", "missing", "where", "not received"]):
-        return "receipt_issue"
+    elif "receipt" in query_lower or "80g" in query_lower or "acknowledgment" in query_lower or "certificate" in query_lower:
+        if any(word in query_lower for word in ["get", "got", "check", "see", "need", "find", "want", "didn't", "not received", "haven't received", "missing", "where"]):
+            return "receipt_issue"
     elif any(word in query_lower for word in ["utr", "transaction", "payment", "confirm", "successful", "went through"]):
         return "utr_verification"
     elif any(word in query_lower for word in ["volunteer", "volunteering", "help out", "join", "participate"]):

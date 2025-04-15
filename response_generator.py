@@ -9,6 +9,7 @@ from utils.email_utils import handle_email_receipt_request
 from utils.transaction_utils import get_latest_transaction
 
 async def generate_response_async(query, sender_phone, client):
+    print("WORKNING?????????????")
     model = "gemini-2.0-flash"
 
     lang_code, language_name = detect_language(query)
@@ -16,9 +17,12 @@ async def generate_response_async(query, sender_phone, client):
     extracted_info = extract_info_from_query(query)
     intent = identify_intent(query)
 
+    print("intent", intent)
     if intent == "receipt_issue":
+        print("YO?1")
         return await handle_email_receipt_request(query, sender_phone, client)
 
+    print("2")
     # Handle transaction verification
     if intent == "utr_verification":
         latest_transaction = await get_latest_transaction(sender_phone)

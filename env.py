@@ -13,6 +13,9 @@ NEON_DB_HOST = os.getenv("NEON_DB_HOST")
 NEON_DB_PORT = os.getenv("NEON_DB_PORT")
 NEON_DB_NAME = os.getenv("NEON_DB_NAME")
 
+# SendGrid API key for sending emails
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+
 
 # Expanded dummy donation data with more realistic information
 DUMMY_DONATIONS = {
