@@ -1,10 +1,12 @@
 import sendgrid
 import os
 from dotenv import load_dotenv
-from sendgrid.helpers.mail import Mail, Email, To, Content
+from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileName, FileType, Disposition
 import asyncio
 import asyncpg
 from env import SENDGRID_API_KEY, NEON_DB_USER, NEON_DB_PASSWORD, NEON_DB_HOST, NEON_DB_PORT, NEON_DB_NAME
+import base64
+from utils.pdf_generator import generate_pdf
 
 sg = sendgrid.SendGridAPIClient(SENDGRID_API_KEY)
 
@@ -60,6 +62,17 @@ async def handle_email_receipt_request_async(query, sender_phone, client):
     subject = "Your Transaction Receipt Summary"
     content = Content("text/plain", email_body)
     mail = Mail(from_email, to_email, subject, content)
+
+    # Generate PDF
+    pdf_data = generate_pdf(transactions)
+    encoded_pdf = base64.b64encode(pdf_data).decode()
+
+    attachment = Attachment()
+    attachment.file_content = FileContent(encoded_pdf)
+    attachment.file_type = FileType("application/pdf")
+    attachment.file_name = FileName("receipt_summary.pdf")
+    attachment.disposition = Disposition("attachment")
+    mail.attachment = attachment
 
     try:
         response = sg.client.mail.send.post(request_body=mail.get())

@@ -6,3 +6,4 @@ twilio
 asyncpg
 langdetect
 sendgrid
+reportlab
