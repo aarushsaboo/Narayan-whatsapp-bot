@@ -5,6 +5,8 @@ from google.genai import types
 from env import DUMMY_DONATIONS, DONOR_EMAILS, LONG_CONTEXT, OFFICE_HOURS, CURRENT_CAMPAIGNS, GREETINGS
 from message_analysis import detect_language, extract_info_from_query, identify_intent, get_user_id_from_info
 from database import get_user_data, update_user_data
+from utils.email_utils import handle_email_receipt_request
+from utils.transaction_utils import get_latest_transaction
 
 async def generate_response_async(query, sender_phone, client):
     model = "gemini-2.0-flash"
@@ -13,6 +15,17 @@ async def generate_response_async(query, sender_phone, client):
     
     extracted_info = extract_info_from_query(query)
     intent = identify_intent(query)
+
+    if intent == "receipt_issue":
+        return await handle_email_receipt_request(query, sender_phone, client)
+
+    # Handle transaction verification
+    if intent == "utr_verification":
+        latest_transaction = await get_latest_transaction(sender_phone)
+        if latest_transaction:
+            return f"Yes, I can confirm your latest transaction of ₹{latest_transaction['amount']} on {latest_transaction['transaction_date'].strftime('%Y-%m-%d')} with transaction ID {latest_transaction['transaction_id']} has been received. Thank you for your support!"
+        else:
+            return "I couldn't find any recent transactions associated with your number. If you've made a donation recently, it may take some time to reflect in our system."
 
     user_phone = get_user_id_from_info(extracted_info, sender_phone)
 
