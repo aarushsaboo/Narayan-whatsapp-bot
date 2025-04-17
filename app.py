@@ -57,7 +57,7 @@ def payment():
 
     # Process payment data here
     # For example, you can save it to a database or perform some action
-    print(data)
+    # app.logger.info("Payment data received: %s", data)
 
     return jsonify({"status": "success", "message": "Payment processed successfully"}), 200
 if __name__ == '__main__':
