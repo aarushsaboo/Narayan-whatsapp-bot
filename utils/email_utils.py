@@ -53,7 +53,7 @@ def format_transaction_email(transactions):
         )
     return "\n".join(lines)
 
-async def handle_email_receipt_request_async(query, sender_phone, client):
+async def handle_email_receipt_request(query, sender_phone, client):
     transactions = await get_transactions_by_phone(sender_phone)
     email_body = format_transaction_email(transactions)
 
@@ -81,6 +81,3 @@ async def handle_email_receipt_request_async(query, sender_phone, client):
     except Exception as e:
         print(f"❌ Failed to send email: {str(e)}")
         return "I ran into an issue while sending your transaction receipt. Please try again later."
-
-def handle_email_receipt_request(query, sender_phone, client):
-    return handle_email_receipt_request_async(query, sender_phone, client)

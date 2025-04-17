@@ -50,14 +50,21 @@ def root():
     return jsonify({"status": "ok", "message": "Narayan Shiva Sansthan WhatsApp Service"}), 200
 
 @app.route('/payment', methods=['POST'])
+# the kind of data it is receiving: {
+#     name: name,
+#     phoneNumber: phone,
+#     amount: parseFloat(amount),
+#   }
 def payment():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid data"}), 400
 
-    # Process payment data here
-    # For example, you can save it to a database or perform some action
-    # app.logger.info("Payment data received: %s", data)
+    insert_in_db(data.get("name"), data.get("phoneNumber"), data.get("amount"))
+
+    send_receipt_whatsapp(data.get("phoneNumber"), data.get("name"), data.get("amount"))
+
+    send_receipt_email(data.get("phoneNumber"), data.get("name"), data.get("amount"))
 
     return jsonify({"status": "success", "message": "Payment processed successfully"}), 200
 if __name__ == '__main__':
