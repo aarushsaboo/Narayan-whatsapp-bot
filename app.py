@@ -4,8 +4,10 @@ from twilio.twiml.messaging_response import MessagingResponse
 from google import genai
 from env import GEMINI_API_KEY
 from response_generator import generate_response
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app) 
 
 # Initialize Gemini client
 client = genai.Client(
@@ -47,5 +49,16 @@ def health_check():
 def root():
     return jsonify({"status": "ok", "message": "Narayan Shiva Sansthan WhatsApp Service"}), 200
 
+@app.route('/payment', methods=['POST'])
+def payment():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid data"}), 400
+
+    # Process payment data here
+    # For example, you can save it to a database or perform some action
+    print(data)
+
+    return jsonify({"status": "success", "message": "Payment processed successfully"}), 200
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=4000, debug=False)
