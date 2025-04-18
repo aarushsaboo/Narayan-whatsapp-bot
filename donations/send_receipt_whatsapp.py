@@ -17,32 +17,30 @@ client            = Client(ACCOUNT_SID, AUTH_TOKEN)
 async def send_receipt_whatsapp(name, phone_number, amount):
     # 1️⃣ Fetch & format
     transactions  = await get_transactions_by_phone(phone_number)
+    print(transactions)
     message_text  = format_transaction_email(transactions)
 
     # 2️⃣ Generate PDF bytes
     pdf_bytes = generate_pdf(transactions)
 
-    # 3️⃣ Upload PDF to file.io (in a thread to avoid blocking)
-    def _upload():
-        resp = requests.post(
-            "https://file.io",
-            files={"file": ("receipt.pdf", pdf_bytes, "application/pdf")}
-        )
-        resp.raise_for_status()
-        return resp.json()["link"]
+    print("ErROR? 2")
 
-    file_url = await asyncio.to_thread(_upload)
+    # inside send_receipt_whatsapp, replace upload logic with:
+    file_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+
 
     # 4️⃣ Send via Twilio (also in a thread)
     def _send():
+        to_number = 'whatsapp:+919158898111'
         return client.messages.create(
-            from_=WHATSAPP_FROM,
-            to=f"whatsapp:+{phone_number.lstrip('+')}",
+            from_="whatsapp:+14155238886",
+            to=to_number,
             body=message_text,
             media_url=[file_url]
         )
 
     sent = await asyncio.to_thread(_send)
+    print("ErROR? 4")
 
     return {
         "to":    f"whatsapp:+{phone_number.lstrip('+')}",

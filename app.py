@@ -72,6 +72,7 @@ def payment():
 
     response_text = "We're sending you the receipt for your records. Thanks for your support!"
     
+    print("what is going on 1?")
     whatsapp_res = asyncio.run(send_receipt_whatsapp(name, phone, amount))
 
     asyncio.run(handle_email_receipt_request("", data.get("phoneNumber"), client))
