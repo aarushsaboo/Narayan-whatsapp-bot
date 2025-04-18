@@ -5,6 +5,10 @@ from google import genai
 from env import GEMINI_API_KEY
 from response_generator import generate_response
 from flask_cors import CORS
+from donations.insert_in_db import insert_in_db
+from donations.send_receipt_whatsapp import send_receipt_whatsapp
+from utils.email_utils import handle_email_receipt_request
+import asyncio
 
 app = Flask(__name__)
 CORS(app) 
@@ -59,13 +63,25 @@ def payment():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid data"}), 400
+    
+    name        = data.get("name")
+    phone       = data.get("phoneNumber")
+    amount      = data.get("amount")
 
-    insert_in_db(data.get("name"), data.get("phoneNumber"), data.get("amount"))
+    asyncio.run(insert_in_db(data.get("name"), data.get("phoneNumber"), data.get("amount")))
 
-    send_receipt_whatsapp(data.get("phoneNumber"), data.get("name"), data.get("amount"))
+    response_text = "We're sending you the receipt for your records. Thanks for your support!"
+    
+    whatsapp_res = asyncio.run(send_receipt_whatsapp(name, phone, amount))
 
-    send_receipt_email(data.get("phoneNumber"), data.get("name"), data.get("amount"))
+    asyncio.run(handle_email_receipt_request("", data.get("phoneNumber"), client))
 
-    return jsonify({"status": "success", "message": "Payment processed successfully"}), 200
+    
+    response = MessagingResponse()
+    response.message(response_text)
+
+    twiml_string = str(response)
+
+    return twiml_string, 200, {'Content-Type': 'application/xml'}
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=4000, debug=False)
