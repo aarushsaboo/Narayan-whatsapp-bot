@@ -61,8 +61,11 @@ document.addEventListener("DOMContentLoaded", function () {
         amount: parseFloat(amount),
       }),
     })
-      .then((response) => response.json())
-      .then((data) => {
+      .then((response) =>{
+        if (!response.ok) throw new Error("Network response was not ok");
+          return response.text();
+      })
+      .then((twiml) => {
         // Handle success
         alert("Thank you for your donation of ₹" + amount + "!")
 
