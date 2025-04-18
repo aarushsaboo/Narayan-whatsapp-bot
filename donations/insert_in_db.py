@@ -7,9 +7,6 @@ async def insert_in_db(name, phone_number, amount):
     conn = await asyncpg.connect(dsn)
 
     try:
-        # 2️⃣ Ensure phone has +91
-        formatted_phone = phone_number if phone_number.startswith("+91") else "+91" + phone_number
-
         # 3️⃣ Generate a VARCHAR(20) transaction_id
         txn_id = uuid.uuid4().hex[:20]  # e.g. '9f8c7b6a5d4e3f2a1b0c'
 
@@ -28,7 +25,7 @@ async def insert_in_db(name, phone_number, amount):
         """
 
         # 5️⃣ Pass exactly 4 params → $1=txn_id, $2=name, $3=phone, $4=amount
-        await conn.execute(query, txn_id, name, formatted_phone, amount)
+        await conn.execute(query, txn_id, name, phone_number, amount)
 
         print("✅ Data inserted successfully!")
         return "Transaction saved."

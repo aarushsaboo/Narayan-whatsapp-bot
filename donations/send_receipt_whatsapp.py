@@ -17,8 +17,6 @@ client            = Client(ACCOUNT_SID, AUTH_TOKEN)
 async def send_receipt_whatsapp(name, phone_number, amount):
     # 1️⃣ Fetch & format
     print(phone_number)
-    if not phone_number.startswith("+"):
-        phone_number = "+91" + phone_number
 
     transactions  = await get_transactions_by_phone(phone_number)
     print(transactions)

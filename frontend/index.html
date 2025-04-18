@@ -101,6 +101,19 @@
             box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
         }
         
+        .phone-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .country-code {
+            flex: 0 0 100px;
+        }
+        
+        .phone-number {
+            flex: 1;
+        }
+        
         .amount-group {
             display: flex;
             flex-wrap: wrap;
@@ -220,12 +233,24 @@
             <div class="form">
                 <div class="form-group">
                     <label class="form-label">Full Name</label>
-                    <input type="text" class="form-control" placeholder="Enter your name">
+                    <input type="text" class="form-control" placeholder="Enter your name" id="name-input">
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label">Phone Number</label>
-                    <input type="tel" class="form-control" placeholder="Enter 10-digit mobile number">
+                    <div class="phone-input-container">
+                        <select class="form-control country-code" id="country-code">
+                            <option value="+91">+91 (IN)</option>
+                            <option value="+1">+1 (US)</option>
+                            <option value="+44">+44 (UK)</option>
+                            <option value="+61">+61 (AU)</option>
+                            <option value="+65">+65 (SG)</option>
+                            <option value="+971">+971 (UAE)</option>
+                            <option value="+86">+86 (CN)</option>
+                            <option value="+81">+81 (JP)</option>
+                        </select>
+                        <input type="tel" class="form-control phone-number" placeholder="Mobile number" id="phone-input">
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -240,10 +265,10 @@
                 
                 <div class="form-group">
                     <label class="form-label">Custom Amount (₹)</label>
-                    <input type="number" class="form-control" placeholder="Enter amount">
+                    <input type="number" class="form-control" placeholder="Enter amount" id="amount-input">
                 </div>
                 
-                <button class="btn-pay">
+                <button class="btn-pay" id="pay-button">
                     <span>Pay Now</span>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>

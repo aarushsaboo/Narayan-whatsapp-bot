@@ -1,17 +1,12 @@
-// Simplified payment.js - Handles NSS donation form
-
+// NSS Donation Form JavaScript with country code support
 document.addEventListener("DOMContentLoaded", function () {
   // Select form elements
-  const donationForm = document.querySelector(".form")
-  const nameInput = document.querySelector(
-    'input[placeholder="Enter your name"]'
-  )
-  const phoneInput = document.querySelector(
-    'input[placeholder="Enter 10-digit mobile number"]'
-  )
-  const amountInput = document.querySelector('input[type="number"]')
+  const nameInput = document.getElementById("name-input")
+  const countryCodeSelect = document.getElementById("country-code")
+  const phoneInput = document.getElementById("phone-input")
+  const amountInput = document.getElementById("amount-input")
   const amountButtons = document.querySelectorAll(".amount-btn")
-  const payButton = document.querySelector(".btn-pay")
+  const payButton = document.getElementById("pay-button")
 
   // Set up amount buttons
   amountButtons.forEach((button) => {
@@ -26,6 +21,7 @@ document.addEventListener("DOMContentLoaded", function () {
   payButton.addEventListener("click", function () {
     // Basic validation
     const name = nameInput.value.trim()
+    const countryCode = countryCodeSelect.value
     const phone = phoneInput.value.trim()
     const amount = amountInput.value.trim()
 
@@ -34,8 +30,8 @@ document.addEventListener("DOMContentLoaded", function () {
       return
     }
 
-    if (!phone || phone.length !== 10 || !/^\d+$/.test(phone)) {
-      alert("Please enter a valid 10-digit phone number")
+    if (!phone || !/^\d+$/.test(phone)) {
+      alert("Please enter a valid phone number")
       return
     }
 
@@ -43,6 +39,9 @@ document.addEventListener("DOMContentLoaded", function () {
       alert("Please enter a valid amount")
       return
     }
+
+    // Format full phone number with country code
+    const fullPhoneNumber = countryCode + phone
 
     // Show loading state
     const originalButtonHTML = payButton.innerHTML
@@ -57,13 +56,13 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       body: JSON.stringify({
         name: name,
-        phoneNumber: phone,
+        phoneNumber: fullPhoneNumber,
         amount: parseFloat(amount),
       }),
     })
-      .then((response) =>{
-        if (!response.ok) throw new Error("Network response was not ok");
-          return response.text();
+      .then((response) => {
+        if (!response.ok) throw new Error("Network response was not ok")
+        return response.text()
       })
       .then((twiml) => {
         // Handle success
@@ -77,12 +76,13 @@ document.addEventListener("DOMContentLoaded", function () {
       })
       .catch((error) => {
         // Handle error
+        console.error("Payment error:", error)
         alert("Payment failed. Please try again.")
       })
-    //   .finally(() => {
-    //     // Reset button state
-    //     payButton.innerHTML = originalButtonHTML
-    //     payButton.disabled = false
-    //   })
+      .finally(() => {
+        // Reset button state
+        // payButton.innerHTML = originalButtonHTML
+        // payButton.disabled = false
+      })
   })
 })
